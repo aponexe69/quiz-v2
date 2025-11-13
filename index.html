@@ -778,10 +778,16 @@
 
         // Load top 10 scores from Firestore
         async function loadLeaderboard(limitN = 10) {
+            const ol = document.getElementById("leaderboard-ol");
+            if (!ol) {
+                console.error("Leaderboard OL element not found");
+                return;
+            }
+            
             try {
-                const q = query(scoresCol, orderBy("score", "desc"), orderBy("timestamp", "asc"), limit(limitN));
+                // Simplified query - only order by score (no composite index needed)
+                const q = query(scoresCol, orderBy("score", "desc"), limit(limitN * 2)); // Get more to sort by timestamp in JS
                 const snap = await getDocs(q);
-                const ol = document.getElementById("leaderboard-ol");
                 ol.innerHTML = "";
 
                 if (snap.empty) {
@@ -789,9 +795,41 @@
                     return;
                 }
 
-                let rank = 1;
+                // Convert to array and sort by score (desc) then timestamp (asc) in JavaScript
+                const scores = [];
                 snap.forEach((docSnap) => {
                     const data = docSnap.data();
+                    // Handle timestamp - could be Timestamp object, number, or null
+                    let timestampMs = 0;
+                    if (data.timestamp) {
+                        if (data.timestamp.toMillis) {
+                            timestampMs = data.timestamp.toMillis();
+                        } else if (typeof data.timestamp === 'number') {
+                            timestampMs = data.timestamp;
+                        } else if (data.timestamp.seconds) {
+                            timestampMs = data.timestamp.seconds * 1000;
+                        }
+                    }
+                    scores.push({
+                        ...data,
+                        timestamp: timestampMs,
+                        id: docSnap.id
+                    });
+                });
+
+                // Sort by score (desc), then by timestamp (asc) for tie-breaking
+                scores.sort((a, b) => {
+                    if (b.score !== a.score) {
+                        return b.score - a.score;
+                    }
+                    return a.timestamp - b.timestamp;
+                });
+
+                // Take top N
+                const topScores = scores.slice(0, limitN);
+
+                let rank = 1;
+                topScores.forEach((data) => {
                     const li = document.createElement("li");
                     li.style.marginBottom = "16px";
                     li.style.listStyle = "none";
@@ -813,8 +851,11 @@
                     rank++;
                 });
 
+                console.log("✓ Leaderboard loaded successfully:", topScores.length, "scores");
+
             } catch (err) {
                 console.error("❌ Error loading leaderboard:", err);
+                ol.innerHTML = `<li style='color: #dc3545; font-style: italic;'>Error loading leaderboard: ${err.message}. Please check console for details.</li>`;
             }
         }
 
@@ -831,12 +872,17 @@
 
         // Load entry page leaderboard on page load
         async function loadEntryPageLeaderboard() {
+            const ol = document.getElementById("entry-leaderboard-ol");
+            
+            if (!ol) {
+                console.error("Entry leaderboard OL element not found");
+                return;
+            }
+            
             try {
-                const q = query(scoresCol, orderBy("score", "desc"), orderBy("timestamp", "asc"), limit(10));
+                // Simplified query - only order by score (no composite index needed)
+                const q = query(scoresCol, orderBy("score", "desc"), limit(20)); // Get more to sort by timestamp in JS
                 const snap = await getDocs(q);
-                const ol = document.getElementById("entry-leaderboard-ol");
-                
-                if (!ol) return; // Safety check
                 ol.innerHTML = "";
 
                 if (snap.empty) {
@@ -844,9 +890,41 @@
                     return;
                 }
 
-                let rank = 1;
+                // Convert to array and sort by score (desc) then timestamp (asc) in JavaScript
+                const scores = [];
                 snap.forEach((docSnap) => {
                     const data = docSnap.data();
+                    // Handle timestamp - could be Timestamp object, number, or null
+                    let timestampMs = 0;
+                    if (data.timestamp) {
+                        if (data.timestamp.toMillis) {
+                            timestampMs = data.timestamp.toMillis();
+                        } else if (typeof data.timestamp === 'number') {
+                            timestampMs = data.timestamp;
+                        } else if (data.timestamp.seconds) {
+                            timestampMs = data.timestamp.seconds * 1000;
+                        }
+                    }
+                    scores.push({
+                        ...data,
+                        timestamp: timestampMs,
+                        id: docSnap.id
+                    });
+                });
+
+                // Sort by score (desc), then by timestamp (asc) for tie-breaking
+                scores.sort((a, b) => {
+                    if (b.score !== a.score) {
+                        return b.score - a.score;
+                    }
+                    return a.timestamp - b.timestamp;
+                });
+
+                // Take top 10
+                const topScores = scores.slice(0, 10);
+
+                let rank = 1;
+                topScores.forEach((data) => {
                     const li = document.createElement("li");
                     li.style.marginBottom = "16px";
                     li.style.listStyle = "none";
@@ -868,8 +946,11 @@
                     rank++;
                 });
 
+                console.log("✓ Entry page leaderboard loaded successfully:", topScores.length, "scores");
+
             } catch (err) {
                 console.error("❌ Error loading entry page leaderboard:", err);
+                ol.innerHTML = `<li style='color: #dc3545; font-style: italic;'>Error loading leaderboard: ${err.message}. Please check console for details.</li>`;
             }
         }
 
